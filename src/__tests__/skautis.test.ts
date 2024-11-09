@@ -1,12 +1,14 @@
 import { SkautisAPI } from "../index";
 
+jest.mock("../services/SkautIsAuthService");
+
 describe("SkautisAPI", () => {
     let api: SkautisAPI;
 
     beforeEach(() => {
         api = new SkautisAPI({
             apiKey: process.env.SKAUTIS_API_KEY || "",
-            testMode: process.env.SKAUTIS_TEST_MODE === "true",
+            testMode: process.env.SKAUTIS_TEST_MODE === "true" || false,
         });
     });
 
@@ -29,8 +31,52 @@ describe("SkautisAPI", () => {
     });
 
     describe("login", () => {
-        it("should throw not implemented error", async () => {
-            await expect(api.login("user", "pass")).rejects.toThrow("Not implemented");
+        it("should call SkautIsAuthService with correct parameters", async () => {
+            const mockLoginResult = {
+                ID: "123",
+                ID_User: 456,
+                Token: "test-token",
+                // ... další properties podle potřeby
+            };
+
+            // Mock SkautIsAuthService
+            jest.mock("../services/SkautIsAuthService", () => {
+                return {
+                    SkautIsAuthService: jest.fn().mockImplementation(() => {
+                        return {
+                            login: jest.fn().mockResolvedValue(mockLoginResult),
+                        };
+                    }),
+                };
+            });
+
+            const result = await api.login("testuser", "testpass");
+
+            expect(result).toEqual(mockLoginResult);
+            const authService = require("../services/SkautIsAuthService").SkautIsAuthService;
+            const mockInstance = authService.mock.instances[0];
+
+            expect(mockInstance.login).toHaveBeenCalledWith({
+                Username: "testuser",
+                Password: "testpass",
+                ApplicationId: process.env.SKAUTIS_API_KEY || "",
+                Persist: false,
+            });
+        });
+
+        it("should throw error when login fails", async () => {
+            // Mock SkautIsAuthService with error
+            jest.mock("../services/SkautIsAuthService", () => {
+                return {
+                    SkautIsAuthService: jest.fn().mockImplementation(() => {
+                        return {
+                            login: jest.fn().mockRejectedValue(new Error("Login failed")),
+                        };
+                    }),
+                };
+            });
+
+            await expect(api.login("baduser", "badpass")).rejects.toThrow("Login failed");
         });
     });
 
